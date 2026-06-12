@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from pptx import Presentation
-import tempfile
+import io
 
 app = FastAPI()
 
@@ -11,11 +11,9 @@ def root():
 def extract_shape_text(shape):
     texts = []
 
-    # 일반 텍스트박스/도형
     if hasattr(shape, "text") and shape.text:
         texts.append(shape.text.strip())
 
-    # 표 추출
     if hasattr(shape, "has_table") and shape.has_table:
         for row in shape.table.rows:
             cells = []
@@ -24,7 +22,6 @@ def extract_shape_text(shape):
                 cells.append(cell_text)
             texts.append(" | ".join(cells))
 
-    # 그룹 도형 안쪽까지 추출
     if hasattr(shape, "shapes"):
         for sub_shape in shape.shapes:
             texts.extend(extract_shape_text(sub_shape))
@@ -33,11 +30,8 @@ def extract_shape_text(shape):
 
 @app.post("/extract-ppt")
 async def extract_ppt(file: UploadFile = File(...)):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-
-    prs = Presentation(tmp_path)
+    ppt_bytes = await file.read()
+    prs = Presentation(io.BytesIO(ppt_bytes))
 
     result = []
 
