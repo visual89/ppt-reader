@@ -6,7 +6,30 @@ app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"status":"ok"}
+    return {"status": "ok"}
+
+def extract_shape_text(shape):
+    texts = []
+
+    # 일반 텍스트박스/도형
+    if hasattr(shape, "text") and shape.text:
+        texts.append(shape.text.strip())
+
+    # 표 추출
+    if hasattr(shape, "has_table") and shape.has_table:
+        for row in shape.table.rows:
+            cells = []
+            for cell in row.cells:
+                cell_text = cell.text.strip()
+                cells.append(cell_text)
+            texts.append(" | ".join(cells))
+
+    # 그룹 도형 안쪽까지 추출
+    if hasattr(shape, "shapes"):
+        for sub_shape in shape.shapes:
+            texts.extend(extract_shape_text(sub_shape))
+
+    return texts
 
 @app.post("/extract-ppt")
 async def extract_ppt(file: UploadFile = File(...)):
@@ -22,12 +45,16 @@ async def extract_ppt(file: UploadFile = File(...)):
         texts = []
 
         for shape in slide.shapes:
-            if hasattr(shape, "text") and shape.text:
-                texts.append(shape.text)
+            texts.extend(extract_shape_text(shape))
+
+        cleaned_texts = []
+        for t in texts:
+            if t and t not in cleaned_texts:
+                cleaned_texts.append(t)
 
         result.append({
             "slide": i,
-            "text": "\n".join(texts)
+            "text": "\n".join(cleaned_texts)
         })
 
     return result
